@@ -2,7 +2,7 @@
 
 A Fabric server-only mod for private group conversations in Minecraft Java. Players can organize conversations with friends or teammates while keeping the public chat clear. Players do **not** need a client mod: commands, colors and clickable invitations use standard Minecraft features.
 
-Create a group, invite players and send messages with `/gc` or `/groupchat`. Each member can choose a personal color and short alias. Owners and co-owners manage membership, while server administrators can inspect group details and recover ownership when needed. All mod messages, command help and generated configuration comments are in English.
+Create a group, invite players and send messages with `/gc` or `/groupchat`. Each member can choose a personal color and short alias. Owners and co-owners manage membership, while server administrators can inspect group details and recover ownership when needed. 
 
 ## Features
 
@@ -10,21 +10,9 @@ Create a group, invite players and send messages with `/gc` or `/groupchat`. Eac
 - Clickable invitations for online and known offline players, with configurable cooldown and expiry.
 - Owner, co-owner and member roles with separate management rights.
 - Personal one- or two-character aliases and all standard Minecraft chat colors.
-- Confirmation commands for deletion and ownership transfers.
 - Optional LuckPerms integration with individual command permissions and ownership limits per player or rank.
 - Separate moderation logs for each group, with automatic retention.
 - Persistent groups, invitations, roles and personal preferences across server restarts.
-
-## Installation
-
-1. Choose a GroupChat build that matches your server's Minecraft version. Install the compatible Fabric Loader and use the Java version required by that build.
-2. Put the GroupChat mod JAR and a matching **Fabric API** in the server's `mods` directory. The TOML libraries and Fabric Permissions API are bundled inside the GroupChat JAR. LuckPerms for Fabric is optional.
-3. Start the server. It creates `config/groupchats/groupchat.toml` and `config/groupchats/logs/`. Group data is written to `<world>/data/groupchat.json` on the first saved change.
-4. Edit the TOML configuration if needed, then restart the server.
-
-Compatibility is specific to each build. The source checkout records its Minecraft and dependency versions in [gradle.properties](gradle.properties), and its runtime requirements in [fabric.mod.json](src/main/resources/fabric.mod.json).
-
-Install the mod only on the server. JARs containing `sources` or `smoke` in their filenames are not the release mod.
 
 ## Configuration
 
@@ -191,25 +179,6 @@ Groups, memberships, roles, invitations, invitation cooldowns and personal prefe
 
 Saving uses a temporary file and an atomic replacement where supported. Failed saves roll back the in-memory change. Unreadable or structurally invalid data is not silently overwritten. Stop the server before restoring a valid backup.
 
-## Building and testing
-
-Use the JDK required by [build.gradle](build.gradle) and the included Gradle wrapper.
-
-Linux/macOS:
-
-```bash
-./gradlew build
-```
-
-Windows:
-
-```bat
-gradlew.bat build
-```
-
-The mod JAR is written to `build/libs/`. Run `./gradlew test` for automated tests covering group rules, ownership limits, log retention and configuration migration.
-
-The separate harness in `src/smoke` runs against a Fabric server with simulated player connections. It is excluded from the release JAR. See [TESTS.md](TESTS.md) for procedures, coverage and test results.
 
 ## License
 
