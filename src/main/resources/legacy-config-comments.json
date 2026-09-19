@@ -1,0 +1,10 @@
+{
+  "# Aufbewahrung der Gruppennachrichten in groupchats/logs, in Stunden.": "# Group message retention in groupchats/logs, in hours.",
+  "# Abgelaufene Einträge werden beim Start und danach etwa jede Minute entfernt.": "# Expired entries are removed at startup and about once a minute.",
+  "# Abgelaufene Einträge werden beim Start und mindestens einmal pro Minute entfernt.": "# Expired entries are removed at startup and about once a minute.",
+  "# GroupChat – Änderungen werden beim nächsten Serverstart übernommen.": "# GroupChat - Changes take effect after restarting the server.",
+  "# Wartezeit zwischen Einladungen desselben Absenders an denselben Spieler.": "# Delay between invitations from the same sender to the same player.",
+  "# Gilt gruppenübergreifend. 0 deaktiviert den Cooldown.": "# Applies across all groups. Set to 0 to disable the cooldown.",
+  "# Maximale Anzahl eigener Gruppen. Mitgliedschaften und Co-Owner-Rollen zählen nicht.": "# Maximum groups owned per player. Memberships and co-owner roles do not count.",
+  "# Gültigkeit einer Einladung in Tagen (auch während der Spieler offline ist).": "# Invitation lifetime in days, including time the player spends offline."
+}

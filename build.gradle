@@ -1,0 +1,46 @@
+plugins {
+    id 'net.fabricmc.fabric-loom' version "${loom_version}"
+}
+repositories { mavenCentral() }
+loom {
+    serverOnlyMinecraftJar()
+    if (project.hasProperty('smokeRunDir')) {
+        runs { server { runDir project.property('smokeRunDir') } }
+    }
+}
+dependencies {
+    minecraft "com.mojang:minecraft:${minecraft_version}"
+    implementation "net.fabricmc:fabric-loader:${loader_version}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${fabric_api_version}"
+    include implementation('me.lucko:fabric-permissions-api:0.7.0')
+    include implementation('com.electronwill.night-config:core:3.8.3')
+    include implementation('com.electronwill.night-config:toml:3.8.3')
+    testImplementation platform('org.junit:junit-bom:5.13.4')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+processResources {
+    inputs.property 'version', project.version
+    filesMatching('fabric.mod.json') { expand version: project.version }
+}
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(25)
+    withSourcesJar()
+}
+tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8'; options.release = 25 }
+test { useJUnitPlatform() }
+
+// Optional integration harness; deliberately excluded from the distributable mod JAR.
+sourceSets {
+    smoke {
+        compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
+        runtimeClasspath += sourceSets.main.output + sourceSets.main.runtimeClasspath
+    }
+}
+dependencies { smokeCompileOnly 'net.luckperms:api:5.5' }
+tasks.register('smokeJar', Jar) {
+    archiveFileName = 'groupchat-smoke.jar'
+    from sourceSets.smoke.output
+}
+
+jar { from('LICENSE') }

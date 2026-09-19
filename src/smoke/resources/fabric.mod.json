@@ -1,0 +1,1 @@
+{"schemaVersion":1,"id":"groupchat_smoke","version":"1.0.0","name":"GroupChat Integration Harness","environment":"server","entrypoints":{"main":["de.groupchat.smoke.ServerSmoke"]},"depends":{"groupchat":"*"}}
