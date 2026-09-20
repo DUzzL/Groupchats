@@ -19,17 +19,24 @@ public final class ChatLogStore {
     private final Path directory;
     private final Duration retention;
     private final Clock clock;
+    private final boolean enabled;
 
     public ChatLogStore(Path directory, long retentionHours, Clock clock) throws IOException {
-        if (retentionHours < 1 || retentionHours > 87_600) throw new IllegalArgumentException("Invalid log retention period.");
+        if (retentionHours != -1 && (retentionHours < 1 || retentionHours > 87_600)) throw new IllegalArgumentException("Invalid log retention period. Use -1 to disable logging, or 1 to 87600 hours.");
         this.directory = directory;
-        this.retention = Duration.ofHours(retentionHours);
+        this.enabled = retentionHours != -1;
+        this.retention = enabled ? Duration.ofHours(retentionHours) : Duration.ZERO;
         this.clock = Objects.requireNonNull(clock);
-        Files.createDirectories(directory);
-        cleanup();
+        if (enabled) {
+            Files.createDirectories(directory);
+            cleanup();
+        }
     }
 
+    public boolean enabled() { return enabled; }
+
     public synchronized void append(GroupService.GroupView group, UUID sender, String senderName, String message) throws IOException {
+        if (!enabled) return;
         JsonObject entry = new JsonObject();
         entry.addProperty("timestamp", clock.instant().toString());
         entry.addProperty("group_id", group.id().toString());
@@ -44,6 +51,7 @@ public final class ChatLogStore {
 
     /** Prune by message timestamp, including inactive and deleted groups. */
     public synchronized void cleanup() throws IOException {
+        if (!enabled) return;
         Instant cutoff = clock.instant().minus(retention);
         IOException failure = null;
         try (var files = Files.list(directory)) {

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.1+26.2
+
+- Allow `chat_log_retention_hours = -1` to disable moderation logging; use it as the default for new or missing settings.
+- Skip log creation, writes and cleanup while disabled, preserving normal chat delivery and any existing logs.
+- Keep existing positive retention settings. Reject `0` with an error explaining the `-1` option.
+
 ## 1.2.0+26.2
 
 - Add optional LuckPerms support through the bundled Fabric Permissions API 0.7.0.

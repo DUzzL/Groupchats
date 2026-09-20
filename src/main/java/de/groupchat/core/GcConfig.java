@@ -12,9 +12,9 @@ import java.nio.file.AtomicMoveNotSupportedException;
 
 public record GcConfig(long inviteCooldownSeconds, int maxOwnedGroups, long inviteExpiryDays, long chatLogRetentionHours) {
     public static final String LOG_SETTING = """
-            # Group message retention in groupchats/logs, in hours.
+            # Group message retention in groupchats/logs, in hours. Set to -1 to disable logging.
             # Expired entries are removed at startup and about once a minute.
-            chat_log_retention_hours = 24
+            chat_log_retention_hours = -1
             """;
     public static final String DEFAULT_TOML = """
             # GroupChat - Changes take effect after restarting the server.
@@ -30,7 +30,7 @@ public record GcConfig(long inviteCooldownSeconds, int maxOwnedGroups, long invi
             """ + "\n" + LOG_SETTING;
 
     public GcConfig(long inviteCooldownSeconds, int maxOwnedGroups, long inviteExpiryDays) {
-        this(inviteCooldownSeconds, maxOwnedGroups, inviteExpiryDays, 24);
+        this(inviteCooldownSeconds, maxOwnedGroups, inviteExpiryDays, -1);
     }
 
     public GcConfig {
@@ -40,8 +40,8 @@ public record GcConfig(long inviteCooldownSeconds, int maxOwnedGroups, long invi
             throw new IllegalArgumentException("max_owned_groups must be between 1 and 100000.");
         if (inviteExpiryDays < 1 || inviteExpiryDays > 3650)
             throw new IllegalArgumentException("invite_expiry_days must be between 1 and 3650.");
-        if (chatLogRetentionHours < 1 || chatLogRetentionHours > 87_600)
-            throw new IllegalArgumentException("chat_log_retention_hours must be between 1 and 87600.");
+        if (chatLogRetentionHours != -1 && (chatLogRetentionHours < 1 || chatLogRetentionHours > 87_600))
+            throw new IllegalArgumentException("chat_log_retention_hours must be -1 to disable logging, or between 1 and 87600.");
     }
 
     public static GcConfig loadFromConfigDirectory(Path configDirectory) throws IOException {
@@ -98,7 +98,7 @@ public record GcConfig(long inviteCooldownSeconds, int maxOwnedGroups, long invi
         return new GcConfig(number(parsed.getOrElse("invite_cooldown_seconds", 60), "invite_cooldown_seconds"),
                 Math.toIntExact(number(parsed.getOrElse("max_owned_groups", 3), "max_owned_groups")),
                 number(parsed.getOrElse("invite_expiry_days", 7), "invite_expiry_days"),
-                number(parsed.getOrElse("chat_log_retention_hours", 24), "chat_log_retention_hours"));
+                number(parsed.getOrElse("chat_log_retention_hours", -1), "chat_log_retention_hours"));
     }
 
     private static long number(Object value, String key) {

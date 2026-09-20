@@ -18,6 +18,35 @@ class ChatLogStoreTest {
     GroupService.GroupView group(String name) { return new GroupService.GroupView(UUID.randomUUID(), name, sender, Set.of(sender), Set.of()); }
     Path file(GroupService.GroupView group) { return directory.resolve(group.id() + ".jsonl"); }
 
+    @Test void disabledLoggingCreatesNoDirectoryOrMessages() throws Exception {
+        Path missing = directory.resolve("logs");
+        var logs = new ChatLogStore(missing, -1, clock);
+        assertFalse(logs.enabled());
+        logs.append(group("Base"), sender, "Alex", "Not logged");
+        logs.cleanup();
+        assertFalse(Files.exists(missing));
+    }
+    @Test void disabledLoggingDoesNotAccessAnUnusableLogLocation() throws Exception {
+        Path blocked = directory.resolve("logs");
+        Files.writeString(blocked, "A file instead of a directory");
+        var logs = new ChatLogStore(blocked, -1, clock);
+        logs.append(group("Base"), sender, "Alex", "Still delivered");
+        logs.cleanup();
+        assertEquals("A file instead of a directory", Files.readString(blocked));
+    }
+    @Test void disablingPreservesExistingLogsAndReenablingResumesCleanup() throws Exception {
+        var logs = new ChatLogStore(directory, 24, clock); var group = group("Base");
+        logs.append(group, sender, "Alex", "Previously logged");
+        String original = Files.readString(file(group));
+        clock.advance(25 * 3_600_000L);
+        var disabled = new ChatLogStore(directory, -1, clock);
+        disabled.append(group, sender, "Alex", "Must not be logged");
+        disabled.cleanup();
+        assertEquals(original, Files.readString(file(group)));
+        assertTrue(new ChatLogStore(directory, 24, clock).enabled());
+        assertFalse(Files.exists(file(group)));
+    }
+
     @Test void writesSeparateGroupLogsWithCompleteMetadataAndEscapesMessages() throws Exception {
         var logs = new ChatLogStore(directory, 24, clock);
         var one = group("Base1"); var two = group("Base2");

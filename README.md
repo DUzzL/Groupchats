@@ -11,7 +11,7 @@ Create a group, invite players and send messages with `/gc` or `/groupchat`. Eac
 - Owner, co-owner and member roles with separate management rights.
 - Personal one- or two-character aliases and all standard Minecraft chat colors.
 - Optional LuckPerms integration with individual command permissions and ownership limits per player or rank.
-- Separate moderation logs for each group, with automatic retention.
+- Optional moderation logs for each group, with automatic retention. Disabled by default.
 - Persistent groups, invitations, roles and personal preferences across server restarts.
 
 ## Configuration
@@ -20,14 +20,14 @@ Create a group, invite players and send messages with `/gc` or `/groupchat`. Eac
 invite_cooldown_seconds = 60
 max_owned_groups = 3
 invite_expiry_days = 7
-chat_log_retention_hours = 24
+chat_log_retention_hours = -1
 ```
 
 - The invitation cooldown applies to each **sender/recipient pair across all groups**. Another sender may independently invite the same recipient. Set it to `0` to disable the cooldown.
 - A pending invitation to the same group cannot be sent again. Accepting, declining, changing groups or restarting the server does not bypass the cooldown.
 - Only owned groups count toward the ownership limit. Memberships and co-owner roles do not count. Administrative transfers also respect the limit.
 - Invitations expire after seven real days by default, including offline time. Changing this setting affects newly issued invitations.
-- Chat logs retain messages for **24 hours** by default. `chat_log_retention_hours` accepts whole hours from 1 to 87600; a changed retention period applies after restarting the server.
+- Moderation logging is **disabled by default** with `chat_log_retention_hours = -1`. Set a whole number from 1 to 87600 to enable logging with that retention period in hours, for example `24` for one day. `0` is invalid; use `-1` to disable the feature. Restart the server after changing this setting.
 - Deletion and ownership transfer require a second command with `confirm` within **30 seconds**. These actions have **no confirmation buttons**.
 - Invalid configuration values produce a startup error. The invalid file is not overwritten with defaults.
 
@@ -147,6 +147,8 @@ Example message:
 Only the group name is bold. The entire line, including brackets, alias and sender, uses the **recipient's chosen color**. The alias block is omitted when that recipient has no alias. Messages are delivered only to currently connected group members. There is no delayed delivery or player-accessible chat history. Server moderation logs are described below.
 
 ## Moderation logs
+
+Set `chat_log_retention_hours` to a positive number of hours to enable moderation logs. With `-1` (the default), messages are delivered normally without logging, no log directory is created, and automatic log cleanup is disabled. Existing logs are left untouched while logging is disabled.
 
 ```text
 config/

@@ -62,14 +62,17 @@ public final class GroupChatMod implements ModInitializer {
             service = new GroupService(server.getWorldPath(LevelResource.ROOT).resolve("data/groupchat.json"), config, Clock.systemUTC());
             importKnownPlayers(server);
             chatLogs = new ChatLogStore(configDirectory.resolve("groupchats/logs"), config.chatLogRetentionHours(), Clock.systemUTC());
-            logCleanup = Executors.newSingleThreadScheduledExecutor(runnable -> {
-                Thread thread = new Thread(runnable, "groupchat-log-cleanup");
-                thread.setDaemon(true);
-                return thread;
-            });
-            logCleanup.scheduleWithFixedDelay(this::cleanupLogs, 60, 60, TimeUnit.SECONDS);
-            LOGGER.info("GroupChat started: {} groups; ownership limit {}; invitation cooldown {}s; chat log retention {}h.",
-                    service.groups().size(), config.maxOwnedGroups(), config.inviteCooldownSeconds(), config.chatLogRetentionHours());
+            if (chatLogs.enabled()) {
+                logCleanup = Executors.newSingleThreadScheduledExecutor(runnable -> {
+                    Thread thread = new Thread(runnable, "groupchat-log-cleanup");
+                    thread.setDaemon(true);
+                    return thread;
+                });
+                logCleanup.scheduleWithFixedDelay(this::cleanupLogs, 60, 60, TimeUnit.SECONDS);
+            }
+            LOGGER.info("GroupChat started: {} groups; ownership limit {}; invitation cooldown {}s; chat logging {}.",
+                    service.groups().size(), config.maxOwnedGroups(), config.inviteCooldownSeconds(),
+                    chatLogs.enabled() ? config.chatLogRetentionHours() + "h retention" : "disabled");
         } catch (Exception e) {
             throw new IllegalStateException("GroupChat could not start. Check the configuration, data file and logs; existing data has been preserved.", e);
         }

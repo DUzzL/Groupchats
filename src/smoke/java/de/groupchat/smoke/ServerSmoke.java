@@ -93,7 +93,27 @@ public final class ServerSmoke implements ModInitializer {
         Path configuration = FabricLoader.getInstance().getConfigDir().resolve("groupchats/groupchat.toml");
         Path logs = configuration.getParent().resolve("logs");
         check(Files.exists(configuration), "Configuration in new groupchats directory");
-        check(Files.readString(configuration).contains("chat_log_retention_hours = 24"), "Log retention default written");
+        if (de.groupchat.core.GcConfig.load(configuration).chatLogRetentionHours() == -1) {
+            check(Files.readString(configuration).contains("chat_log_retention_hours = -1"), "Logging is disabled by default");
+            check(!Files.exists(logs), "Disabled logging creates no log directory on startup");
+            check(Thread.getAllStackTraces().keySet().stream().noneMatch(t -> t.getName().equals("groupchat-log-cleanup")), "Disabled logging starts no cleanup thread");
+            ok(d, owner.source, "gc create WithoutLogs");
+            ok(d, owner.source, "gc invite WithoutLogs GcAlice");
+            ok(d, alice.source, "gc accept WithoutLogs");
+            ok(d, alice.source, "gc shorten WithoutLogs w");
+            ok(d, alice.source, "gc color WithoutLogs green");
+            int before = outside.connection.messages.size();
+            ok(d, owner.source, "gc WithoutLogs Message without logging");
+            check(alice.connection.messages.getLast().getString().equals("[WithoutLogs] [w] GcOwner: Message without logging"), "Chat still delivered with a personal alias while logging is disabled");
+            check(outside.connection.messages.size() == before, "Disabled logging preserves private delivery");
+            check(!Files.exists(logs), "Disabled logging writes no message files");
+            Files.writeString(logs, "Logging disabled: this path is intentionally blocked");
+            ok(d, alice.source, "groupchat w Chat still works");
+            check(owner.connection.messages.getLast().getString().equals("[WithoutLogs] GcAlice: Chat still works"), "An unusable log path does not block disabled chat");
+            check(Files.readString(logs).equals("Logging disabled: this path is intentionally blocked"), "Disabled logging leaves existing files unchanged");
+            return;
+        }
+        check(Files.readString(configuration).contains("chat_log_retention_hours = 24"), "Explicit log retention setting loaded");
         check(Files.isDirectory(logs), "Log directory created");
         ok(d, owner.source, "gc create Base1");
         check(owner.connection.messages.getLast().getString().equals("[GC] Created group Base1."), "English success message");
