@@ -39,7 +39,7 @@ public final class ServerSmoke implements ModInitializer {
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             try {
                 run(server);
-                Files.writeString(Path.of("smoke-result.txt"), "PASS: " + checks + " integration assertions on Minecraft 26.2 / Fabric\n");
+                Files.writeString(Path.of("smoke-result.txt"), "PASS: " + checks + " integration assertions on Minecraft 26.3 / Fabric\n");
                 System.out.println("GROUPCHAT_SMOKE_PASS " + checks);
             } catch (Throwable e) {
                 e.printStackTrace();

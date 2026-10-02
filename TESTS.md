@@ -1,6 +1,6 @@
 # Test report
 
-Test environment: Minecraft 26.2, Fabric Loader 0.19.5, Fabric API 0.161.0+26.2, Java 25 and Gradle 9.5.1.
+Test environment: Minecraft 26.3, Fabric Loader 0.19.5, Fabric API 0.161.0+26.3, Java 25 and Gradle 9.6.0.
 
 ## Automated tests
 
@@ -28,7 +28,7 @@ Coverage includes:
 
 ## Integration on a running server
 
-The harness uses an actual Fabric 26.2 dedicated server with simulated `ServerPlayer` connections. It captures and checks the Minecraft chat packets sent to those players.
+The harness uses an actual Fabric 26.3 dedicated server with simulated `ServerPlayer` connections. It captures and checks the Minecraft chat packets sent to those players.
 
 | Run | Passed assertions |
 | --- | --- |
