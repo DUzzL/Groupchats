@@ -1,11 +1,11 @@
 # Changelog
 
-## 1.2.2+26.3
+## beta2-26.3
 
 - Update Minecraft and Fabric API compatibility to 26.3.
 - Carry forward the player-name completion fix from the 26.2 maintenance branch.
 
-## 1.2.2+26.2
+## beta2-26.2
 
 - Prevent player-name Tab completion from throwing when Brigadier supplies a command context without a `group` argument.
 - Keep suggestions for valid group command paths and add a regression check for the missing-argument context.
