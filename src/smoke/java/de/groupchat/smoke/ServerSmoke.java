@@ -116,6 +116,18 @@ public final class ServerSmoke implements ModInitializer {
         check(Files.readString(configuration).contains("chat_log_retention_hours = 24"), "Explicit log retention setting loaded");
         check(Files.isDirectory(logs), "Log directory created");
         ok(d, owner.source, "gc create Base1");
+        var gcNode = d.getRoot().getChild("gc");
+        var inviteNode = gcNode.getChild("invite");
+        var playerNode = (com.mojang.brigadier.tree.ArgumentCommandNode<CommandSourceStack, ?>) inviteNode.getChild("group").getChild("player");
+        var missingGroup = new com.mojang.brigadier.context.CommandContextBuilder<>(d, owner.source, d.getRoot(), 0)
+                .withNode(gcNode, com.mojang.brigadier.context.StringRange.between(0, 2))
+                .withNode(inviteNode, com.mojang.brigadier.context.StringRange.between(3, 9))
+                .build("gc invite ");
+        check(playerNode.getCustomSuggestions().getSuggestions(missingGroup,
+                new com.mojang.brigadier.suggestion.SuggestionsBuilder("gc invite ", 10)).get().isEmpty(),
+                "Player completion handles a command context without a group argument");
+        check(suggestions(d, owner.source, "gc invite Base1 ").contains("GcAlice"),
+                "Player completion still suggests eligible players for a valid group");
         check(owner.connection.messages.getLast().getString().equals("[GC] Created group Base1."), "English success message");
         Path groupLog = logs.resolve(service.find("Base1").id() + ".jsonl");
         ok(d, owner.source, "groupchat create Base2");

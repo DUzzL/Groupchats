@@ -33,9 +33,10 @@ The harness uses an actual Fabric 26.2 dedicated server with simulated `ServerPl
 | Run | Passed assertions |
 | --- | --- |
 | Default logging disabled (`-1`), without LuckPerms | 16 |
-| Logging explicitly enabled (`24`), with LuckPerms Fabric 5.5.85 and Fabric Permissions API 0.7.0 | 219 |
+| Logging explicitly enabled (`24`), without LuckPerms | 111 |
+| Logging explicitly enabled (`24`), with LuckPerms Fabric 5.5.85 and Fabric Permissions API 0.7.0 | 219 (previous release) |
 
-The disabled run checks generated defaults, absence of a cleanup thread and log directory, private message delivery, aliases, and continued delivery with an unusable log path. Its sentinel file also remains unchanged after server shutdown. The enabled run includes 96 base assertions and 123 LuckPerms checks.
+The disabled run checks generated defaults, absence of a cleanup thread and log directory, private message delivery, aliases, and continued delivery with an unusable log path. Its sentinel file also remains unchanged after server shutdown. The enabled run includes two new checks for a missing `group` argument during player completion and for valid player suggestions.
 
 Coverage includes both command roots, OP level 3/4 permissions, console administration, renaming, co-owner roles, tab completion, invitation click actions, offline invitations on login, personal colors and aliases, bold group names, exclusion of non-members, transfers and deletion. English success messages, command errors, invitation text and button labels are checked explicitly.
 
@@ -43,7 +44,7 @@ Log checks cover the configuration directory, complete message metadata, one log
 
 LuckPerms coverage checks every player permission with both command roots, explicit denials after parsing, wildcard denial with an individual exception, separate administrator grants without OP, explicit administrative denies despite OP level 4, preservation of group roles, rank-inherited limits, invalid metadata, zero quotas, quota changes at confirmation, revoked transfer permissions and saved metadata for offline recipients. It also checks that an administrator granted only list access cannot obtain group members through ordinary management suggestions.
 
-The additional controlled provider suite passed 109 assertions in the previous release and remains available when logging is enabled without LuckPerms. It checks pending lookup feedback, rejection of duplicate pending requests, permission revocation while a lookup is running, immediate and deferred failures, the 10-second timeout, recovery after timeout and disconnect cancellation. The deliberately injected errors and timeout in that test log are expected.
+The controlled provider suite passed 111 assertions in this release and remains available when logging is enabled without LuckPerms. It checks pending lookup feedback, rejection of duplicate pending requests, permission revocation while a lookup is running, immediate and deferred failures, the 10-second timeout, recovery after timeout and disconnect cancellation. The deliberately injected errors and timeout in that test log are expected.
 
 The earlier review reproduced a console completion `NullPointerException` before the fix. Its regression assertion remains part of the enabled-logging integration suite. The release archive was checked for its server-only metadata and three bundled dependencies, with no smoke-test classes or LuckPerms implementation bundled.
 
@@ -60,6 +61,6 @@ Run only in a separate development environment. The harness performs administrat
 5. Run `./gradlew runServer -PsmokeRunDir=/absolute/path/to/test-directory`. The development launch loads the main mod and Fabric API automatically.
 6. With no pre-existing config, the test directory's `smoke-result.txt` must begin with `PASS: 16`. The disabled-logging test leaves a sentinel file at `config/groupchats/logs` to verify that shutdown does not access it. A successful Gradle exit alone is not proof that the assertions passed.
 7. Repeat in another fresh directory with `LuckPerms-Fabric-5.5.85.jar` in `mods/` and a `config/groupchats/groupchat.toml` containing `chat_log_retention_hours = 24`. This selects the full logging and LuckPerms suite, including an actual scheduled cleanup cycle. That run must produce `PASS: 219`.
-8. To run the controlled provider suite, use a fresh directory with the same explicit `24` setting but without LuckPerms. The expected result is `PASS: 109`.
+8. To run the controlled provider suite, use a fresh directory with the same explicit `24` setting but without LuckPerms. The expected result is `PASS: 111`.
 
 Use a fresh test directory for every run. The harness uses fixed player names and expects an empty group database.

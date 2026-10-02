@@ -240,7 +240,10 @@ public final class GcCommands {
             try {
                 String action = commandAction(c);
                 if (!GroupPermissions.allowed(c.getSource(), action)) return b.buildFuture();
-                var g = service().find(arg(c, "group"));
+                String groupName;
+                try { groupName = arg(c, "group"); }
+                catch (IllegalArgumentException missingGroup) { return b.buildFuture(); }
+                var g = service().find(groupName);
                 UUID actor = c.getSource().isPlayer() ? c.getSource().getPlayer().getUUID() : null;
                 if (!action.equals("admin.transfer")) {
                     if (actor == null || !g.manages(actor)) return b.buildFuture();

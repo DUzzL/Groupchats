@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.2+26.2
+
+- Prevent player-name Tab completion from throwing when Brigadier supplies a command context without a `group` argument.
+- Keep suggestions for valid group command paths and add a regression check for the missing-argument context.
+
 ## 1.2.1+26.2
 
 - Allow `chat_log_retention_hours = -1` to disable moderation logging; use it as the default for new or missing settings.
