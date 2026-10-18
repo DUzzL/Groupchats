@@ -59,7 +59,7 @@ Run only in a separate development environment. The harness performs administrat
 3. Create a `server.properties` in the test directory with `server-ip=127.0.0.1`, an available `server-port`, `online-mode=false`, `view-distance=2`, `simulation-distance=2` and `max-tick-time=-1`. The latter prevents the watchdog from ending the intentional wait for scheduled cleanup.
 4. Review and accept the Minecraft EULA for this test server (`eula=true` in its `eula.txt`).
 5. Run `./gradlew runServer -PsmokeRunDir=/absolute/path/to/test-directory`. The development launch loads the main mod and Fabric API automatically.
-6. With no pre-existing config, the test directory's `smoke-result.txt` must begin with `PASS: 16`. The disabled-logging test leaves a sentinel file at `config/groupchats/logs` to verify that shutdown does not access it. A successful Gradle exit alone is not proof that the assertions passed.
+6. With no pre-existing config, the test directory's `smoke-result.txt` must begin with `PASS: 55`. The disabled-logging test leaves a sentinel file at `config/groupchats/logs` to verify that shutdown does not access it. A successful Gradle exit alone is not proof that the assertions passed.
 7. Repeat in another fresh directory with `LuckPerms-Fabric-5.5.85.jar` in `mods/` and a `config/groupchats/groupchat.toml` containing `chat_log_retention_hours = 24`. This selects the full logging and LuckPerms suite, including an actual scheduled cleanup cycle. That run must produce `PASS: 219`.
 8. To run the controlled provider suite, use a fresh directory with the same explicit `24` setting but without LuckPerms. The expected result is `PASS: 111`.
 

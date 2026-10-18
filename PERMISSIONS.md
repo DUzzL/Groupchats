@@ -24,7 +24,9 @@ All player permissions below default to **true** when the provider leaves them u
 | `groupchat.command.transfer` | `/gc transfer <group> <player> [confirm]` |
 | `groupchat.command.shorten` | `/gc shorten <group> [alias]` |
 | `groupchat.command.color` | `/gc color <group> <color>` |
-| `groupchat.command.chat` | `/gc <group-or-alias> <message>` |
+| `groupchat.command.chat` | `/gc <group-or-alias> <message>`, and chat routed by focus mode |
+| `groupchat.command.focus` | `/gc focus [group-or-alias]` |
+| `groupchat.command.mute` | `/gc mute <group>` |
 
 The four administrative permissions default to **OP level 4 / console** when unset. Grant them individually to allow non-OP administrators to perform specific actions.
 

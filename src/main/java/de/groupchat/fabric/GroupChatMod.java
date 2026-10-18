@@ -8,6 +8,8 @@ import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
+import net.fabricmc.fabric.api.message.v1.ServerMessageEvents;
+import net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.storage.LevelResource;
@@ -23,6 +25,7 @@ public final class GroupChatMod implements ModInitializer {
     private GroupService service;
     private ChatLogStore chatLogs;
     private ScheduledExecutorService logCleanup;
+    private final GcCommands commands = new GcCommands(this);
     public GroupService service() {
         if (service == null) throw new IllegalStateException("GroupChat has not started yet.");
         return service;
@@ -36,7 +39,8 @@ public final class GroupChatMod implements ModInitializer {
         }
     }
     @Override public void onInitialize() {
-        CommandRegistrationCallback.EVENT.register((dispatcher, registry, environment) -> new GcCommands(this).register(dispatcher));
+        CommandRegistrationCallback.EVENT.register((dispatcher, registry, environment) -> commands.register(dispatcher));
+        ServerMessageEvents.ALLOW_CHAT_MESSAGE.register((message, player, params) -> service == null || commands.routeFocusedChat(player, message.signedContent()));
         ServerLifecycleEvents.SERVER_STARTING.register(this::start);
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> stopLogs());
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> { service = null; chatLogs = null; });
@@ -46,6 +50,10 @@ public final class GroupChatMod implements ModInitializer {
                 service().rememberPlayers(Map.of(player.getUUID(), player.getName().getString()));
                 for (var invitation : service().invitations(player.getUUID()))
                     player.sendSystemMessage(ChatText.invitation(invitation, service().playerName(invitation.inviter())));
+                String focused = commands.focusedGroupName(player.getUUID());
+                if (focused != null) player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+                        "[GC] Focus mode is on: your chat goes to " + focused + ". Use /gc focus to switch back.").withStyle(net.minecraft.ChatFormatting.YELLOW));
+                refreshTabs(server);
             } catch (RuntimeException e) {
                 LOGGER.error("GroupChat could not process player information or invitations", e);
                 listener.player.sendSystemMessage(net.minecraft.network.chat.Component.literal("[GC] Could not load invitations. Please contact an administrator."));
@@ -75,6 +83,33 @@ public final class GroupChatMod implements ModInitializer {
                     chatLogs.enabled() ? config.chatLogRetentionHours() + "h retention" : "disabled");
         } catch (Exception e) {
             throw new IllegalStateException("GroupChat could not start. Check the configuration, data file and logs; existing data has been preserved.", e);
+        }
+    }
+    /**
+     * Sends each online player a private view of the tab list where fellow group members carry the viewer's group tags.
+     * Resends every player pair on join and after tag-changing /gc commands.
+     * Team changes made later (e.g. /team join) show up at the next refresh; hook scoreboard changes if that matters.
+     * Tab-list mods that rewrite display names later will overwrite these tags.
+     */
+    public void refreshTabs(MinecraftServer server) {
+        if (service == null) return;
+        var players = server.getPlayerList().getPlayers();
+        if (players.isEmpty()) return;
+        for (var viewer : players) {
+            var groups = service.groupsFor(viewer.getUUID());
+            var packet = new ClientboundPlayerInfoUpdatePacket(EnumSet.of(ClientboundPlayerInfoUpdatePacket.Action.UPDATE_DISPLAY_NAME), players);
+            var entries = packet.entries().stream().map(e -> {
+                var tag = ChatText.tabTag(groups, g -> service.preference(viewer.getUUID(), g.id()), e.profileId());
+                if (tag == null) return e;
+                // Vanilla formats a null display name with the scoreboard team on the client; keep that once we set one.
+                var target = server.getPlayerList().getPlayer(e.profileId());
+                var name = e.displayName() != null ? e.displayName() : net.minecraft.world.scores.PlayerTeam.formatNameForTeam(
+                        target == null ? null : target.getTeam(), net.minecraft.network.chat.Component.literal(e.profile().name()));
+                return new ClientboundPlayerInfoUpdatePacket.Entry(e.profileId(), e.profile(), e.listed(), e.latency(), e.gameMode(),
+                        tag.append(name), e.showHat(), e.listOrder(), e.chatSession());
+            }).toList();
+            ((de.groupchat.mixin.PlayerInfoPacketAccessor) packet).groupchat$setEntries(entries);
+            viewer.connection.send(packet);
         }
     }
     private void cleanupLogs() {

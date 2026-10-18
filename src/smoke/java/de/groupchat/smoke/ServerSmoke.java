@@ -29,8 +29,17 @@ public final class ServerSmoke implements ModInitializer {
     record Span(String text, Style style) {}
     static final class Capture extends Connection {
         final List<Component> messages = new ArrayList<>();
+        final List<Packet<?>> packets = new ArrayList<>();
         Capture() { super(PacketFlow.SERVERBOUND); }
-        void capture(Packet<?> packet) { if (packet instanceof ClientboundSystemChatPacket chat) messages.add(chat.content()); }
+        void capture(Packet<?> packet) { packets.add(packet); if (packet instanceof ClientboundSystemChatPacket chat) messages.add(chat.content()); }
+        /** Name this player's tab list currently shows for target, or null when vanilla's default applies. */
+        String tabName(UUID target) {
+            for (int i = packets.size() - 1; i >= 0; i--)
+                if (packets.get(i) instanceof net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket info)
+                    for (var e : info.entries()) if (e.profileId().equals(target)) return e.displayName() == null ? null : e.displayName().getString();
+            return null;
+        }
+        long sounds() { return packets.stream().filter(p -> p instanceof net.minecraft.network.protocol.game.ClientboundSoundPacket).count(); }
         @Override public void send(Packet<?> packet) { capture(packet); }
         @Override public void send(Packet<?> packet, ChannelFutureListener listener) { capture(packet); }
         @Override public void send(Packet<?> packet, ChannelFutureListener listener, boolean flush) { capture(packet); }
@@ -82,6 +91,68 @@ public final class ServerSmoke implements ModInitializer {
     static List<String> suggestions(CommandDispatcher<CommandSourceStack> d, CommandSourceStack source, String input) throws Exception {
         return d.getCompletionSuggestions(d.parse(input, source)).get().getList().stream().map(s -> s.getText()).toList();
     }
+    static boolean publicChat(TestPlayer p, String text) {
+        return net.fabricmc.fabric.api.message.v1.ServerMessageEvents.ALLOW_CHAT_MESSAGE.invoker()
+                .allowChatMessage(PlayerChatMessage.system(text), p.player, null);
+    }
+    /** Group WithoutLogs exists with owner + alice (alias w, green) when this runs. */
+    static void focusMuteTabSmoke(MinecraftServer server, CommandDispatcher<CommandSourceStack> d, TestPlayer owner, TestPlayer alice, TestPlayer outside) throws Exception {
+        UUID ownerId = owner.player.getUUID(), aliceId = alice.player.getUUID();
+        // Tab tags: only fellow members see them, in the viewer's own alias/color.
+        check("[w] GcOwner".equals(alice.connection.tabName(ownerId)), "Alice sees her alias tag on the owner in tab");
+        check("[WithoutLogs] GcAlice".equals(owner.connection.tabName(aliceId)), "Owner without alias sees group name tag");
+        check(outside.connection.tabName(ownerId) == null, "Outsider sees no group tags in tab");
+        // Click to reply uses the recipient's alias.
+        ok(d, owner.source, "gc WithoutLogs ping test");
+        check(spans(alice.connection.messages.getLast()).stream().anyMatch(s -> new ClickEvent.SuggestCommand("/gc w ").equals(s.style.getClickEvent())), "Click suggests reply via alias");
+        // Mentions ping only the mentioned player.
+        long aliceSounds = alice.connection.sounds(), ownerSounds = owner.connection.sounds();
+        ok(d, owner.source, "gc WithoutLogs hey @gcalice look");
+        check(alice.connection.sounds() == aliceSounds + 1, "Mentioned player gets a ping");
+        ok(d, owner.source, "gc WithoutLogs GcAlicex is not her");
+        check(alice.connection.sounds() == aliceSounds + 1, "Partial name does not ping");
+        check(owner.connection.sounds() == ownerSounds, "Sender is not pinged");
+        // Focus mode routes public chat to the group and never leaks it.
+        int outsideBefore = outside.connection.messages.size();
+        check(publicChat(owner, "public before focus"), "Without focus, chat stays public");
+        ok(d, owner.source, "gc focus WithoutLogs");
+        check(!publicChat(owner, "secret base coords"), "Focused chat is cancelled publicly");
+        check(alice.connection.messages.getLast().getString().equals("[WithoutLogs] [w] GcOwner: secret base coords"), "Focused chat reaches the group");
+        check(outside.connection.messages.size() == outsideBefore, "Focused chat does not reach outsiders");
+        ok(d, owner.source, "gc focus WithoutLogs");
+        check(publicChat(owner, "public again"), "Focusing the same group again toggles it off");
+        // Mute: muted member stops receiving chat, sender still sees own messages.
+        ok(d, alice.source, "gc mute WithoutLogs");
+        int aliceBefore = alice.connection.messages.size();
+        ok(d, owner.source, "gc WithoutLogs while muted @GcAlice");
+        check(alice.connection.messages.size() == aliceBefore, "Muted member receives no group chat");
+        ok(d, alice.source, "gc WithoutLogs I can still talk");
+        check(alice.connection.messages.getLast().getString().endsWith("I can still talk"), "Muted sender still sees own message");
+        ok(d, alice.source, "gc mute WithoutLogs");
+        ok(d, owner.source, "gc WithoutLogs after unmute");
+        check(alice.connection.messages.getLast().getString().endsWith("after unmute"), "Unmute restores delivery");
+        ok(d, alice.source, "gc focus w");
+        ok(d, owner.source, "gc kick WithoutLogs GcAlice");
+        check(alice.connection.tabName(ownerId) == null, "Kicked member's tab tags are cleared");
+        int ownerBefore = owner.connection.messages.size();
+        check(!publicChat(alice, "meant for the group"), "Message for a lost focus group is not leaked publicly");
+        check(owner.connection.messages.size() == ownerBefore, "Former group does not receive it either");
+        check(publicChat(alice, "now public"), "Focus cleared after losing membership");
+        fail(d, owner.source, "gc create Focus");
+        // Review fixes: no tab traffic per chat message, team formatting kept, no reply action onto subcommands.
+        long infoBefore = alice.connection.packets.stream().filter(p -> p instanceof net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket).count();
+        ok(d, owner.source, "gc WithoutLogs no tab refresh for chat");
+        check(alice.connection.packets.stream().filter(p -> p instanceof net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket).count() == infoBefore, "Chat messages do not resend the tab list");
+        var team = server.getScoreboard().addPlayerTeam("gcsmoke");
+        team.setPlayerPrefix(Component.literal("<T> "));
+        server.getScoreboard().addPlayerToTeam("GcOwner", team);
+        ok(d, owner.source, "gc invite WithoutLogs GcOutside"); ok(d, outside.source, "gc accept WithoutLogs");
+        check("[WithoutLogs] <T> GcOwner".equals(outside.connection.tabName(ownerId)), "Tag keeps scoreboard team prefix: " + outside.connection.tabName(ownerId));
+        var reserved = de.groupchat.fabric.ChatText.message("Mute", new de.groupchat.core.GroupService.PreferenceView(null, "white", false), "x", "y");
+        check(spans(reserved).stream().noneMatch(s -> s.style.getClickEvent() != null), "No reply action for a group named like a subcommand");
+        var aliased = de.groupchat.fabric.ChatText.message("Mute", new de.groupchat.core.GroupService.PreferenceView("m", "white", false), "x", "y");
+        check(spans(aliased).stream().anyMatch(s -> new ClickEvent.SuggestCommand("/gc m ").equals(s.style.getClickEvent())), "Alias reply still offered for such a group");
+    }
     static void run(MinecraftServer server) throws Exception {
         var mod = FabricLoader.getInstance().getEntrypoints("main", ModInitializer.class).stream()
                 .filter(m -> m instanceof GroupChatMod).map(m -> (GroupChatMod)m).findFirst().orElseThrow();
@@ -111,6 +182,7 @@ public final class ServerSmoke implements ModInitializer {
             ok(d, alice.source, "groupchat w Chat still works");
             check(owner.connection.messages.getLast().getString().equals("[WithoutLogs] GcAlice: Chat still works"), "An unusable log path does not block disabled chat");
             check(Files.readString(logs).equals("Logging disabled: this path is intentionally blocked"), "Disabled logging leaves existing files unchanged");
+            focusMuteTabSmoke(server, d, owner, alice, outside);
             return;
         }
         check(Files.readString(configuration).contains("chat_log_retention_hours = 24"), "Explicit log retention setting loaded");

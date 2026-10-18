@@ -12,6 +12,9 @@ Create a group, invite players and send messages with `/gc` or `/groupchat`. Eac
 - Personal one- or two-character aliases and all standard Minecraft chat colors.
 - Optional LuckPerms integration with individual command permissions and ownership limits per player or rank.
 - Optional moderation logs for each group, with automatic retention. Disabled by default.
+- Focus mode: `/gc focus <group>` sends everything you type in normal chat to that group until you switch back.
+- Per-group mute, clickable messages to reply, and a sound ping when a group message mentions your name.
+- Group tags in the tab list (e.g. `[b] Alex`), visible only to fellow members and shown in your own alias and color.
 - Persistent groups, invitations, roles and personal preferences across server restarts.
 
 ## Configuration
@@ -58,6 +61,9 @@ chat_log_retention_hours = -1
 | `/gc shorten <group>` | Remove your personal alias |
 | `/gc <alias> <message>` | Send a message using your alias |
 | `/gc color <group> <color>` | Set your personal group color; Tab shows the choices |
+| `/gc focus <group-or-alias>` | Send all your normal chat to that group; run again to switch back |
+| `/gc focus` | Switch focus mode off; chat goes to public chat again |
+| `/gc mute <group>` | Stop or resume receiving a group's messages without leaving it |
 
 The group owner creates a group and invites Alex:
 
@@ -134,7 +140,7 @@ See [PERMISSIONS.md](PERMISSIONS.md) for all nodes, defaults, examples and offli
 
 Group names contain **3–20 ASCII characters**: `A–Z`, `a–z`, `0–9`, `_` and `-`. Spaces and accented letters are not allowed. Names are unique across the server regardless of case, while the chosen spelling is preserved for display.
 
-Reserved command words: `gc`, `groupchat`, `create`, `rename`, `delete`, `confirm`, `invite`, `kick`, `transfer`, `accept`, `decline`, `leave`, `shorten`, `color`, `coowner`, `add`, `remove`, `list`, `info`, `help`, `admin`.
+Reserved command words: `gc`, `groupchat`, `create`, `rename`, `delete`, `confirm`, `invite`, `kick`, `transfer`, `accept`, `decline`, `leave`, `shorten`, `color`, `coowner`, `add`, `remove`, `list`, `info`, `help`, `admin`, `focus`, `mute`. Existing groups that already use `focus` or `mute` keep loading; chat to them via an alias.
 
 Aliases use the same character set, contain 1–2 characters and must be unique for each player. Different players may use the same alias. Renaming a group preserves memberships and personal preferences.
 
@@ -143,6 +149,10 @@ Colors: `black`, `dark_blue`, `dark_green`, `dark_aqua`, `dark_red`, `dark_purpl
 Example message:
 
 [**Basemates**] [b] Alex: Hello everyone!
+
+Clicking a group message fills in `/gc <your alias or group> ` to reply. Mentioning a member's name (with or without `@`) plays a short ping for them. Focus mode is not saved across server restarts; if you lose membership of your focused group, your next message is blocked instead of going to public chat. Muted members still get system notices such as joins and kicks.
+
+Tab-list tags are sent per player, so other players never see your groups. Another tab-list mod that rewrites display names may overwrite them.
 
 Only the group name is bold. The entire line, including brackets, alias and sender, uses the **recipient's chosen color**. The alias block is omitted when that recipient has no alias. Messages are delivered only to currently connected group members. There is no delayed delivery or player-accessible chat history. Server moderation logs are described below.
 

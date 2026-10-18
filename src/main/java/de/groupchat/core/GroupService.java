@@ -12,7 +12,9 @@ import static de.groupchat.core.State.*;
 public final class GroupService {
     public static final Set<String> RESERVED = Set.of("gc", "groupchat", "create", "rename", "delete", "confirm",
             "invite", "kick", "transfer", "accept", "decline", "leave", "shorten", "color", "coowner", "add",
-            "remove", "list", "info", "help", "admin");
+            "remove", "list", "info", "help", "admin", "focus", "mute");
+    /** Reserved after release; existing groups with these names must still load. */
+    private static final Set<String> LATER_RESERVED = Set.of("focus", "mute");
     public static final List<String> COLORS = List.of("black", "dark_blue", "dark_green", "dark_aqua", "dark_red",
             "dark_purple", "gold", "gray", "dark_gray", "blue", "green", "aqua", "red", "light_purple", "yellow", "white");
     private static final Pattern NAME = Pattern.compile("[A-Za-z0-9_-]{3,20}");
@@ -26,7 +28,7 @@ public final class GroupService {
     public record GroupView(UUID id, String name, UUID owner, Set<UUID> members, Set<UUID> coowners) {
         public boolean manages(UUID player) { return owner.equals(player) || coowners.contains(player); }
     }
-    public record PreferenceView(String alias, String color) {}
+    public record PreferenceView(String alias, String color, boolean muted) {}
     public record InvitationView(GroupView group, UUID inviter, long expiresAt) {}
     private record Confirmation(String operation, UUID groupId, UUID target, long revision, long expiresAt) {}
 
@@ -86,7 +88,7 @@ public final class GroupService {
         Group group = state.groups.get(groupId);
         if (group == null || !group.members.contains(player)) fail("You are not a member of this group.");
         Preference pref = group.preferences.get(player);
-        return pref == null ? new PreferenceView(null, "white") : new PreferenceView(pref.alias, pref.color);
+        return pref == null ? new PreferenceView(null, "white", false) : new PreferenceView(pref.alias, pref.color, pref.muted);
     }
     public String playerName(UUID id) { return state.players.getOrDefault(id, id.toString()); }
     public Map<UUID, String> knownPlayers() { return Map.copyOf(state.players); }
@@ -213,6 +215,14 @@ public final class GroupService {
         if (!COLORS.contains(normalized)) fail("Invalid color. Press Tab to choose a Minecraft color.");
         change(() -> { group.preferences.computeIfAbsent(player, k -> new Preference()).color = normalized; return null; });
     }
+    /** Returns the new mute state. Muted members still receive system notices. */
+    public boolean toggleMute(UUID player, String name) {
+        Group group = member(player, name);
+        return change(() -> {
+            Preference pref = group.preferences.computeIfAbsent(player, k -> new Preference());
+            return pref.muted = !pref.muted;
+        });
+    }
     /** Returns false when confirmation was requested, true when the action completed. */
     public boolean delete(UUID actor, String name, boolean admin, boolean confirm) {
         Group group = admin ? group(name) : owner(actor, name);
@@ -281,7 +291,8 @@ public final class GroupService {
             if (g == null || g.id == null || !g.id.equals(entry.getKey()) || g.owner == null || g.members == null || g.coowners == null
                     || g.invitations == null || g.preferences == null || !g.members.contains(g.owner) || g.members.contains(null)
                     || !g.members.containsAll(g.coowners) || g.coowners.contains(g.owner)) throw new IllegalStateException("Invalid group");
-            checkName(g.name);
+            if (!LATER_RESERVED.contains(key(g.name))) checkName(g.name);
+            else if (!NAME.matcher(g.name).matches()) throw new IllegalStateException("Invalid group name");
             if (!names.add(key(g.name))) throw new IllegalStateException("Duplicate group name");
             for (var pref : g.preferences.entrySet()) {
                 Preference p = pref.getValue();

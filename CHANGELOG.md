@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Add focus mode (`/gc focus`) that routes normal chat to a group; a message for a lost focus group is blocked, never leaked to public chat.
+- Add per-group mute (`/gc mute`), stored with personal preferences.
+- Group messages are clickable to reply; mentioning a member's name plays a ping for them.
+- Show group tags in the tab list for fellow members only, using a small packet accessor mixin.
+- New permissions `groupchat.command.focus` and `groupchat.command.mute`. Existing data loads unchanged.
+
 ## beta2-26.3
 
 - Update Minecraft and Fabric API compatibility to 26.3.

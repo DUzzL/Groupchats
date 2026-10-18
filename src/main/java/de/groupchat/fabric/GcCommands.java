@@ -24,6 +24,8 @@ public final class GcCommands {
     public GcCommands(GroupChatMod mod) { this.mod = mod; }
     private GroupService service() { return mod.service(); }
     private final Map<UUID, UUID> pendingLimits = new HashMap<>();
+    // Focus mode is runtime-only and resets on restart.
+    private final Map<UUID, UUID> focus = new HashMap<>();
     private enum Scope { MEMBER, MANAGER, OWNER, INVITATION, ADMIN }
     @FunctionalInterface private interface Action { void run(CommandContext<CommandSourceStack> context) throws CommandSyntaxException; }
     private Command<CommandSourceStack> command(Action action) {
@@ -33,6 +35,9 @@ public final class GcCommands {
                 if (!(permission.equals("admin") ? admin(context.getSource()) : GroupPermissions.allowed(context.getSource(), permission)))
                     throw new GcException("You do not have permission to use this command.");
                 action.run(context);
+                // Only these change who shares a group or how tags look.
+                if (Set.of("create", "rename", "accept", "leave", "kick", "shorten", "color", "delete", "admin.delete").contains(permission))
+                    mod.refreshTabs(context.getSource().getServer());
                 return 1;
             }
             catch (GcException e) { context.getSource().sendFailure(Component.literal("[GC] " + e.getMessage())); return 0; }
@@ -112,6 +117,22 @@ public final class GcCommands {
                 .executes(command(c -> {
                     service().color(actor(c), arg(c, "group"), arg(c, "color")); reply(c, "Your group color has been updated.");
                 })))));
+        root.then(restricted("focus")
+                .executes(command(c -> { focus.remove(actor(c)); reply(c, "Focus mode off. Your chat goes to public chat again."); }))
+                .then(word("group").suggests(this::chatTargets).executes(command(c -> {
+                    var group = service().forChat(actor(c), arg(c, "group"));
+                    if (group.id().equals(focus.get(actor(c)))) {
+                        focus.remove(actor(c)); reply(c, "Focus mode off. Your chat goes to public chat again.");
+                    } else {
+                        focus.put(actor(c), group.id());
+                        reply(c, "Focus mode on: everything you type now goes to " + group.name() + ". Use /gc focus to switch back.");
+                    }
+                }))));
+        root.then(restricted("mute").then(group("group", Scope.MEMBER).executes(command(c -> {
+            boolean muted = service().toggleMute(actor(c), arg(c, "group"));
+            reply(c, muted ? "Muted " + arg(c, "group") + ". You will not see its messages until you unmute it."
+                    : "Unmuted " + arg(c, "group") + ".");
+        }))));
         var coowner = literal("coowner").requires(source -> GroupPermissions.allowed(source, "coowner.add") || GroupPermissions.allowed(source, "coowner.remove"));
         for (boolean add : new boolean[]{true, false}) {
             coowner.then(restricted(add ? "add" : "remove", add ? "coowner.add" : "coowner.remove").then(group("group", Scope.OWNER).then(player("player", add ? "add" : "remove")
@@ -132,16 +153,7 @@ public final class GcCommands {
                 .then(restricted("info", "admin.info").then(group("group", Scope.ADMIN).executes(command(c -> info(c, true)))))
                 .then(deleteNode(true)).then(transferNode(true)));
         root.then(word("chat").requires(source -> source.isPlayer() && GroupPermissions.allowed(source, "chat"))
-                .suggests((c, b) -> {
-                    if (!c.getSource().isPlayer() || !GroupPermissions.allowed(c.getSource(), "chat")) return b.buildFuture();
-                    var names = new ArrayList<String>();
-                    for (var g : service().groupsFor(c.getSource().getPlayer().getUUID())) {
-                        names.add(g.name());
-                        String alias = service().preference(c.getSource().getPlayer().getUUID(), g.id()).alias();
-                        if (alias != null) names.add(alias);
-                    }
-                    return SharedSuggestionProvider.suggest(names, b);
-                })
+                .suggests((c, b) -> GroupPermissions.allowed(c.getSource(), "chat") ? chatTargets(c, b) : b.buildFuture())
                 .then(argument("message", StringArgumentType.greedyString()).executes(command(this::chat))));
         var registered = dispatcher.register(root);
         dispatcher.register(literal("groupchat").executes(command(this::help)).redirect(registered));
@@ -264,20 +276,70 @@ public final class GcCommands {
             } catch (GcException e) { return b.buildFuture(); }
         });
     }
+    private java.util.concurrent.CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> chatTargets(
+            CommandContext<CommandSourceStack> c, com.mojang.brigadier.suggestion.SuggestionsBuilder b) {
+        if (!c.getSource().isPlayer()) return b.buildFuture();
+        UUID player = c.getSource().getPlayer().getUUID();
+        var names = new ArrayList<String>();
+        for (var g : service().groupsFor(player)) {
+            names.add(g.name());
+            String alias = service().preference(player, g.id()).alias();
+            if (alias != null) names.add(alias);
+        }
+        return SharedSuggestionProvider.suggest(names, b);
+    }
     private void chat(CommandContext<CommandSourceStack> c) throws CommandSyntaxException {
-        UUID sender = actor(c);
         if (GroupService.RESERVED.contains(GroupService.key(arg(c, "chat")))) throw new GcException("You do not have permission to use this command.");
-        var group = service().forChat(sender, arg(c, "chat"));
-        String message = arg(c, "message").trim();
+        var sender = c.getSource().getPlayerOrException();
+        send(sender, service().forChat(sender.getUUID(), arg(c, "chat")), arg(c, "message"));
+    }
+    private void send(net.minecraft.server.level.ServerPlayer sender, GroupService.GroupView group, String raw) {
+        String message = raw.trim();
         if (message.isEmpty() || message.length() > 2048 || message.codePoints().anyMatch(ch -> Character.isISOControl(ch) || ch == '§'))
             throw new GcException("The message is empty, too long, or contains control characters.");
-        String senderName = c.getSource().getPlayerOrException().getName().getString();
-        mod.logMessage(group, sender, senderName, message);
+        String senderName = sender.getName().getString();
+        mod.logMessage(group, sender.getUUID(), senderName, message);
         for (UUID member : group.members()) {
-            var recipient = c.getSource().getServer().getPlayerList().getPlayer(member);
-            if (recipient != null) recipient.sendSystemMessage(ChatText.message(group.name(), service().preference(member, group.id()),
-                    senderName, message));
+            var recipient = sender.level().getServer().getPlayerList().getPlayer(member);
+            if (recipient == null) continue;
+            var pref = service().preference(member, group.id());
+            if (pref.muted() && recipient != sender) continue;
+            recipient.sendSystemMessage(ChatText.message(group.name(), pref, senderName, message));
+            if (recipient != sender && mentions(message, recipient.getName().getString()))
+                recipient.connection.send(new net.minecraft.network.protocol.game.ClientboundSoundPacket(
+                        net.minecraft.sounds.SoundEvents.NOTE_BLOCK_PLING, net.minecraft.sounds.SoundSource.PLAYERS,
+                        recipient.getX(), recipient.getY(), recipient.getZ(), 1f, 1.5f, 0L));
         }
+    }
+    static boolean mentions(String message, String name) {
+        return java.util.regex.Pattern.compile("(?i)(?<![A-Za-z0-9_])@?" + java.util.regex.Pattern.quote(name) + "(?![A-Za-z0-9_])")
+                .matcher(message).find();
+    }
+    /** Chat hook: returns true when the message should go to public chat. */
+    public boolean routeFocusedChat(net.minecraft.server.level.ServerPlayer player, String message) {
+        UUID groupId = focus.get(player.getUUID());
+        if (groupId == null) return true;
+        try {
+            if (!GroupPermissions.allowed(player.createCommandSourceStack(), "chat"))
+                throw new GcException("You do not have permission to send group messages. Use /gc focus to switch back.");
+            var group = service().groupsFor(player.getUUID()).stream().filter(g -> g.id().equals(groupId)).findFirst().orElse(null);
+            if (group == null) {
+                // Never leak a message meant for a group into public chat.
+                focus.remove(player.getUUID());
+                throw new GcException("You are no longer in your focused group, so focus mode is off. Your message was not sent.");
+            }
+            send(player, group, message);
+        } catch (GcException e) {
+            player.sendSystemMessage(Component.literal("[GC] " + e.getMessage()).withStyle(ChatFormatting.RED));
+        } catch (java.io.UncheckedIOException e) {
+            GroupChatMod.LOGGER.error("GroupChat could not save a change", e);
+            player.sendSystemMessage(Component.literal("[GC] Storage error; please contact an administrator.").withStyle(ChatFormatting.RED));
+        }
+        return false;
+    }
+    public String focusedGroupName(UUID player) {
+        UUID id = focus.get(player);
+        return id == null ? null : service().groupsFor(player).stream().filter(g -> g.id().equals(id)).map(GroupService.GroupView::name).findFirst().orElse(null);
     }
     private void listGroups(CommandContext<CommandSourceStack> c) throws CommandSyntaxException {
         UUID player = actor(c);
@@ -285,7 +347,8 @@ public final class GcCommands {
         for (var group : service().groupsFor(player)) {
             var pref = service().preference(player, group.id());
             reply(c, group.name() + (pref.alias() == null ? "" : " [" + pref.alias() + "]") + " · "
-                    + (group.owner().equals(player) ? "Owner" : group.coowners().contains(player) ? "Co-Owner" : "Member") + " · " + pref.color());
+                    + (group.owner().equals(player) ? "Owner" : group.coowners().contains(player) ? "Co-Owner" : "Member") + " · " + pref.color()
+                    + (pref.muted() ? " · muted" : "") + (group.id().equals(focus.get(player)) ? " · focused" : ""));
         }
         for (var invite : service().invitations(player)) c.getSource().sendSystemMessage(ChatText.invitation(invite, service().playerName(invite.inviter())));
     }
@@ -317,6 +380,8 @@ public final class GcCommands {
                 "/gc delete <group> [confirm] | transfer <group> <player> [confirm]",
                 "/gc shorten <group> [alias] – Omit the alias to remove your personal alias",
                 "/gc color <group> <color> – Press Tab to see all 16 colors",
+                "/gc focus [group|alias] – Send all your chat to a group; no argument switches back",
+                "/gc mute <group> – Stop or resume receiving a group's messages",
                 "/gc list | info <group> | help · Alias: /groupchat")) reply(c, line);
         if (admin(c.getSource())) reply(c, "/gc admin list | info <group> | delete <group> [confirm] | transfer <group> <player> [confirm]");
     }

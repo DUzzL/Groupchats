@@ -161,6 +161,20 @@ class GroupServiceTest {
         denied(() -> service.forChat(owner, "ba"));
         service.shorten(owner, "NewBase", null); denied(() -> service.forChat(owner, "b"));
     }
+    @Test void muteIsPersonalPersistentAndMembersOnly() throws Exception {
+        var g = service.create(owner, "Base"); members("Base", alice);
+        assertTrue(service.toggleMute(alice, "base"));
+        assertFalse(service.preference(owner, g.id()).muted());
+        service = new GroupService(file, config, clock);
+        assertTrue(service.preference(alice, g.id()).muted());
+        assertFalse(service.toggleMute(alice, "Base"));
+        denied(() -> service.toggleMute(bob, "Base"));
+    }
+    @Test void groupsNamedAfterNewCommandWordsStillLoad() throws Exception {
+        service.create(owner, "Base");
+        Files.writeString(file, Files.readString(file).replace("\"Base\"", "\"Mute\""));
+        assertEquals("Mute", new GroupService(file, config, clock).groups().getFirst().name());
+    }
     @Test void aliasesAreUniquePerPlayerAndLimitedToTwoCharacters() {
         service.create(owner, "One"); service.create(owner, "Two");
         members("One", alice);
@@ -179,7 +193,7 @@ class GroupServiceTest {
         service.leave(alice, "Base");
         denied(() -> service.forChat(alice, "b"));
         clock.advance(60_000); members("Base", alice);
-        assertEquals(new GroupService.PreferenceView(null, "white"), service.preference(alice, g.id()));
+        assertEquals(new GroupService.PreferenceView(null, "white", false), service.preference(alice, g.id()));
         assertFalse(service.find("Base").coowners().contains(alice));
     }
     @Test void deletionRequiresExactActorActionAndThirtySecondWindow() {

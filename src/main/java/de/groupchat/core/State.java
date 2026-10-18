@@ -26,5 +26,6 @@ final class State {
     static final class Preference {
         String alias;
         String color = "white";
+        boolean muted;
     }
 }
